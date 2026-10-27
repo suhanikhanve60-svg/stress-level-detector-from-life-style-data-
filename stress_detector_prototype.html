@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stress Level Detector</title>
+<style>
+:root{
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f6f7f9;--card:#ffffff;--text:#1d2330;--muted:#6a7385;--line:#e3e6ec;
+  --low:#2e9e6b;--med:#e0a21a;--high:#d6453d;--accent:#3b6fe0;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#14171d;--card:#1d222b;--text:#e8ebf2;--muted:#9aa3b5;--line:#2c3340;--low:#4fc08c;--med:#f0b93a;--high:#ee6a62;--accent:#6e96f2}
+}
+:root[data-theme="dark"]{--bg:#14171d;--card:#1d222b;--text:#e8ebf2;--muted:#9aa3b5;--line:#2c3340;--low:#4fc08c;--med:#f0b93a;--high:#ee6a62;--accent:#6e96f2}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+.wrap{max-width:880px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.5rem;margin:8px 0 2px}
+.sub{color:var(--muted);margin:0 0 18px;font-size:.95rem}
+.grid{display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+@media (max-width:720px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.field{margin-bottom:14px}
+.field label{display:flex;justify-content:space-between;font-size:.9rem;margin-bottom:4px}
+.field label b{font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:.95rem}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.result{text-align:center;padding:14px 8px;border-radius:12px;margin-bottom:14px;color:#fff;font-weight:700;font-size:1.4rem;transition:background .2s}
+.result small{display:block;font-weight:500;font-size:.8rem;opacity:.9;margin-top:2px}
+.bar{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:.88rem}
+.bar .name{width:64px}
+.bar .track{flex:1;height:12px;background:var(--bg);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.bar .fill{height:100%;width:0;transition:width .25s}
+.bar .pct{width:44px;text-align:right;font-variant-numeric:tabular-nums}
+h2{font-size:1rem;margin:14px 0 6px}
+.drv{display:flex;align-items:center;gap:8px;font-size:.84rem;margin:4px 0}
+.drv .nm{width:130px;color:var(--muted)}
+.drv .half{flex:1;display:flex;height:10px;position:relative}
+.drv .half::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line)}
+.drv .neg,.drv .pos{width:50%;display:flex}
+.drv .neg{justify-content:flex-end}
+.drv .seg{height:100%}
+.note{font-size:.78rem;color:var(--muted);margin-top:14px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+button{padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);cursor:pointer;font-size:.85rem}
+button:hover{border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧠 Stress Level Detector</h1>
+  <p class="sub">Move the sliders and the model predicts Low, Medium or High stress from lifestyle habits.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="row2">
+        <div class="field"><label>Gender</label><select id="gender"><option>Female</option><option>Male</option><option>Other</option></select></div>
+        <div class="field"><label>Diet quality</label><select id="diet_quality"><option>Poor</option><option selected>Average</option><option>Good</option></select></div>
+      </div>
+      <div id="sliders"></div>
+      <div class="btns">
+        <button id="p1">Try: overworked</button>
+        <button id="p2">Try: balanced</button>
+        <button id="p3">Reset</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="result" class="result">—</div>
+      <div id="bars"></div>
+      <h2>What is pushing the prediction?</h2>
+      <div id="drivers"></div>
+      <p class="note">Right of the line = pushes toward the predicted level; left = pushes away. Model: Logistic Regression, the best of 4 models in the project. Trained on a synthetic lifestyle dataset, so this is a course prototype and not a medical diagnosis.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const P = {"classes": ["High", "Low", "Medium"], "num_cols": ["age", "sleep_hours", "screen_time_hours", "caffeine_cups", "exercise_min_per_week", "study_work_hours", "social_hours_per_week"], "cat_cols": ["gender", "diet_quality"], "median": [28.0, 6.8, 6.4, 2.0, 120.0, 6.9, 8.0], "mean": [28.1725, 6.818333333333333, 6.406000000000001, 1.9875, 122.88666666666667, 6.918166666666666, 8.242333333333333], "scale": [6.627549352261865, 1.2872440414397814, 2.394781966415036, 1.3762305100042895, 75.87486730722426, 2.407489004243956, 4.8681712400266095], "cat_categories": [["Female", "Male", "Other"], ["Average", "Good", "Poor"]], "coef": [[-0.04241472120748161, -2.192223852010481, 0.9800678548779242, 0.7542022495367068, -1.277898365097983, 1.0605016936376892, -0.38268111655410525, -0.10495209041105384, -0.05160502486446098, 0.1527809268244169, 0.18373237390269875, -0.7673864651697492, 0.5798779028159591], [0.1185700571362596, 2.1736660690610474, -0.9509227636535295, -0.7464109711307313, 1.3914219555685505, -1.0773741868931304, 0.3763734261432743, 0.02636067501469435, -0.17465762733599113, 0.14881687520134654, -0.13430707431959407, 0.6868303850806212, -0.5520033878809822], [-0.07615533592880104, 0.018557782949438648, -0.02914509122441671, -0.007791278405951088, -0.1135235904705218, 0.0168724932554484, 0.006307690410813998, 0.07859141539635672, 0.22626265220046093, -0.3015978020257632, -0.04942529958309162, 0.08055608008912792, -0.02787451493497497]], "intercept": [-1.0206337073639082, -0.0408277330966344, 1.0614614404605376]};
+const SL = [
+  {k:"age",l:"Age",min:15,max:60,step:1,v:21,u:""},
+  {k:"sleep_hours",l:"Sleep (hours/night)",min:3,max:10,step:0.5,v:7,u:" h"},
+  {k:"screen_time_hours",l:"Screen time (hours/day)",min:1,max:16,step:0.5,v:6,u:" h"},
+  {k:"caffeine_cups",l:"Caffeine (cups/day)",min:0,max:8,step:1,v:2,u:""},
+  {k:"exercise_min_per_week",l:"Exercise (min/week)",min:0,max:420,step:10,v:120,u:" min"},
+  {k:"study_work_hours",l:"Study/work (hours/day)",min:1,max:14,step:0.5,v:7,u:" h"},
+  {k:"social_hours_per_week",l:"Social time (hours/week)",min:0,max:30,step:0.5,v:8,u:" h"}
+];
+const COLORS = {Low:"var(--low)",Medium:"var(--med)",High:"var(--high)"};
+const ORDER = ["Low","Medium","High"];
+const NICE = {age:"Age",sleep_hours:"Sleep",screen_time_hours:"Screen time",caffeine_cups:"Caffeine",exercise_min_per_week:"Exercise",study_work_hours:"Study/work",social_hours_per_week:"Social time",gender:"Gender",diet_quality:"Diet"};
+
+const box = document.getElementById("sliders");
+SL.forEach(s=>{
+  const d=document.createElement("div");d.className="field";
+  d.innerHTML=`<label>${s.l}<b id="v_${s.k}"></b></label><input type="range" id="${s.k}" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.v}">`;
+  box.appendChild(d);
+});
+
+function setVals(o){
+  SL.forEach(s=>{document.getElementById(s.k).value=o[s.k]});
+  document.getElementById("gender").value=o.gender;
+  document.getElementById("diet_quality").value=o.diet_quality;
+  run();
+}
+function read(){
+  const o={};
+  SL.forEach(s=>o[s.k]=parseFloat(document.getElementById(s.k).value));
+  o.gender=document.getElementById("gender").value;
+  o.diet_quality=document.getElementById("diet_quality").value;
+  return o;
+}
+
+// Same pipeline as scikit-learn: impute -> scale -> one-hot -> logistic regression (softmax)
+function predict(o){
+  const feats=[], names=[];
+  P.num_cols.forEach((c,i)=>{
+    let x=o[c]; if(x==null||isNaN(x)) x=P.median[i];
+    feats.push((x-P.mean[i])/P.scale[i]); names.push(c);
+  });
+  P.cat_cols.forEach((c,i)=>{
+    P.cat_categories[i].forEach(cat=>{feats.push(o[c]===cat?1:0);names.push(c);});
+  });
+  const logits=P.coef.map((w,k)=>w.reduce((a,wi,j)=>a+wi*feats[j],P.intercept[k]));
+  const m=Math.max(...logits), ex=logits.map(l=>Math.exp(l-m)), sum=ex.reduce((a,b)=>a+b,0);
+  const probs=ex.map(e=>e/sum);
+  return {probs,feats,names,logits};
+}
+
+function run(){
+  const o=read();
+  SL.forEach(s=>{const u=s.u; document.getElementById("v_"+s.k).textContent=o[s.k]+u;});
+  const r=predict(o);
+  const byClass={}; P.classes.forEach((c,i)=>byClass[c]=r.probs[i]);
+  let best=ORDER[0]; ORDER.forEach(c=>{if(byClass[c]>byClass[best]) best=c;});
+  const res=document.getElementById("result");
+  res.style.background=COLORS[best];
+  res.innerHTML=`${best} stress<small>${(byClass[best]*100).toFixed(0)}% confidence</small>`;
+  document.getElementById("bars").innerHTML=ORDER.map(c=>`<div class="bar"><span class="name">${c}</span><div class="track"><div class="fill" style="width:${byClass[c]*100}%;background:${COLORS[c]}"></div></div><span class="pct">${(byClass[c]*100).toFixed(0)}%</span></div>`).join("");
+
+  // contribution of each feature group relative to the average of the other classes
+  const k=P.classes.indexOf(best), others=P.classes.map((_,i)=>i).filter(i=>i!==k);
+  const contrib={};
+  r.feats.forEach((f,j)=>{
+    const diff=P.coef[k][j]-others.reduce((a,i)=>a+P.coef[i][j],0)/others.length;
+    contrib[r.names[j]]=(contrib[r.names[j]]||0)+diff*f;
+  });
+  const items=Object.entries(contrib).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,6);
+  const mx=Math.max(...items.map(i=>Math.abs(i[1])),0.001);
+  document.getElementById("drivers").innerHTML=items.map(([n,v])=>{
+    const w=Math.abs(v)/mx*100, col=v>=0?COLORS[best]:"var(--muted)";
+    return `<div class="drv"><span class="nm">${NICE[n]}</span><div class="half"><div class="neg">${v<0?`<div class="seg" style="width:${w}%;background:${col}"></div>`:""}</div><div class="pos">${v>=0?`<div class="seg" style="width:${w}%;background:${col}"></div>`:""}</div></div></div>`;
+  }).join("");
+}
+
+document.querySelectorAll("input,select").forEach(e=>e.addEventListener("input",run));
+const DEF={age:21,gender:"Female",sleep_hours:7,screen_time_hours:6,caffeine_cups:2,exercise_min_per_week:120,study_work_hours:7,social_hours_per_week:8,diet_quality:"Average"};
+document.getElementById("p1").onclick=()=>setVals({age:21,gender:"Female",sleep_hours:4.5,screen_time_hours:10,caffeine_cups:5,exercise_min_per_week:0,study_work_hours:11,social_hours_per_week:1,diet_quality:"Poor"});
+document.getElementById("p2").onclick=()=>setVals({age:22,gender:"Male",sleep_hours:8,screen_time_hours:4,caffeine_cups:1,exercise_min_per_week:250,study_work_hours:5,social_hours_per_week:15,diet_quality:"Good"});
+document.getElementById("p3").onclick=()=>setVals(DEF);
+run();
+</script>
+</body>
+</html>
